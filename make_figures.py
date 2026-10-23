@@ -978,6 +978,8 @@ TABLE_LEGENDS = {
         'Genes of each signature locked in TCGA before scoring GSE99420 and the Visium sections (predictor, direction and gene).'),
     'S24_decision_curve_3y': ('Supplementary Table S24. Decision-curve analysis at 3 years.',
         'Net benefit by threshold probability for treat all, treat none, histology plus LVI (M0) and M0 plus the P1 immune programme score (M1), TCGA stage I tumours (n = 98); apparent estimates without correction for optimism.'),
+    'S25_LIANA_tumour_sender': ('Supplementary Table S25. LIANA+ ranking of tumour-sender interactions.',
+        'Resource-wide LIANA+ rank aggregation for interactions sent by malignant cells (SE-like and EC-like) in primary seminoma-containing tumours and in the lymph-node metastases (column context), with ligand and receptor complexes, mean expression, CellPhoneDB-style permutation P values, aggregate magnitude rank and specificity rank (lower ranks indicate stronger and more specific interactions).'),
 }
 
 
@@ -1010,6 +1012,15 @@ def suppl_tables():
                     idx.append(dict(sheet=name, source=str(f.relative_to(PROJ)), rows=len(d)))
                 else:
                     idx.append(dict(sheet=name, source=str(f.relative_to(PROJ)), rows="MISSING"))
+            lia = [(c, S4 / f"B2_liana_{c}_tumour_sender.csv") for c in ("primary_SE", "LN_metastasis")]
+            lia = [pd.read_csv(f).assign(context=c) for c, f in lia if f.exists()]
+            if lia:
+                L_ = pd.concat(lia, ignore_index=True)
+                L_ = L_[["context"] + [c for c in L_.columns if c != "context"]].sort_values(["context", "magnitude_rank"])
+                L_.to_excel(xw, sheet_name="S25_LIANA_tumour_sender", index=False)
+                idx.append(dict(sheet="S25_LIANA_tumour_sender", source="stage4_mechanism/B2_liana_*_tumour_sender.csv", rows=len(L_)))
+            else:
+                idx.append(dict(sheet="S25_LIANA_tumour_sender", source="stage4_mechanism/B2_liana_*", rows="MISSING"))
             if locked.exists():
                 sig = json.load(open(locked))
                 pd.DataFrame([(k, d, g) for k, v in sig.items() for d in ("up", "down") for g in (v.get(d) or [])],
