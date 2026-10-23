@@ -42,8 +42,9 @@ OUT = PROJ / "figures_final"
 OUT.mkdir(parents=True, exist_ok=True)
 MM = 1 / 25.4
 W = 180 * MM
-plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 6.5, "axes.titlesize": 7, "axes.labelsize": 6.5,
-                     "xtick.labelsize": 6, "ytick.labelsize": 6, "legend.fontsize": 5.5, "legend.title_fontsize": 6,
+FS = 8          # Frontiers: smallest visible text >= 8 pt at final size (180 mm wide)
+plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": FS, "axes.titlesize": FS + 0.5, "axes.labelsize": FS,
+                     "xtick.labelsize": FS, "ytick.labelsize": FS, "legend.fontsize": FS, "legend.title_fontsize": FS,
                      "axes.linewidth": 0.5, "xtick.major.width": 0.5, "ytick.major.width": 0.5,
                      "xtick.major.size": 2.5, "ytick.major.size": 2.5, "pdf.fonttype": 42, "ps.fonttype": 42,
                      "axes.spines.top": False, "axes.spines.right": False, "savefig.dpi": 300,
@@ -104,8 +105,9 @@ def read(f, **kw):
     return pd.read_csv(f, **kw)
 
 
-def new_fig(h_mm):
-    fig = plt.figure(figsize=(W, h_mm * MM), layout="constrained")
+def new_fig(h_mm, scale=1.25, max_mm=230):
+    """8-pt text needs ~25% more height than the original 6-pt design; one figure must fit one page"""
+    fig = plt.figure(figsize=(W, min(h_mm * scale, max_mm) * MM), layout="constrained")
     fig.get_layout_engine().set(w_pad=3 / 72, h_pad=3 / 72, wspace=0.04, hspace=0.04)
     fig._repel = []
     fig._post_layout = []
@@ -114,12 +116,12 @@ def new_fig(h_mm):
 
 def title(ax, letter, txt=""):
     """letter + title as ONE left-aligned text -> cannot overlap each other; layout reserves its space"""
-    lab = r"$\bf{" + letter + "}$" if letter else ""
-    ax.set_title(f"{lab}   {txt}" if txt else lab, loc="left", fontsize=7, pad=4)
+    lab = r"$\bf{" + letter.upper() + "}$" if letter else ""   # Frontiers: panels (A), (B), ...
+    ax.set_title(f"{lab}   {txt}" if txt else lab, loc="left", fontsize=FS + 0.5, pad=4)
 
 
 def missing(ax, what, letter=""):
-    ax.text(0.5, 0.5, "input missing:\n" + wrap(what, 30), ha="center", va="center", fontsize=6, color="grey",
+    ax.text(0.5, 0.5, "input missing:\n" + wrap(what, 30), ha="center", va="center", fontsize=FS, color="grey",
             transform=ax.transAxes)
     ax.set_xticks([]); ax.set_yticks([])
     for s in ax.spines.values():
@@ -149,7 +151,7 @@ def bh(p):
     return np.minimum(q, 1)
 
 
-def label_points(fig, ax, xs, ys, labels, fontsize=4.8, sizes=None):
+def label_points(fig, ax, xs, ys, labels, fontsize=FS, sizes=None):
     anns = []
     rad0 = np.sqrt(np.asarray(sizes, float)) / 2 if sizes is not None else np.full(len(labels), 2.0)
     for x, y, l, r0 in zip(xs, ys, labels, rad0):
@@ -222,8 +224,8 @@ def shrink_crowded(fig, r):
             crowd = any(_ovl(bbs[i], bbs[j], 0.3) for i in range(len(bbs)) for j in range(i + 1, len(bbs)))
             if crowd and labs:
                 fs = labs[0].get_fontsize()
-                if fs > 3.9:
-                    ax.tick_params(axis=which, labelsize=max(3.8, fs - 0.5)); changed = True
+                if fs > FS + 0.05:                         # never shrink below the 8-pt journal minimum
+                    ax.tick_params(axis=which, labelsize=max(FS, fs - 0.5)); changed = True
     return changed
 
 
@@ -365,6 +367,13 @@ def save(fig, name):
         fig.canvas.draw(); r = fig.canvas.get_renderer()
         if not shrink_crowded(fig, r):
             break
+    for _ in range(5):                                       # outside legends must not widen the PNG beyond 180 mm
+        fig.canvas.draw(); r = fig.canvas.get_renderer()
+        tb = fig.get_tightbbox(r)
+        excess = tb.width + 0.08 - W                         # 0.08 in = pad_inches on both sides
+        if excess <= 0.01:
+            break
+        fig.set_figwidth(fig.get_figwidth() - excess - 0.01)
     fig.canvas.draw(); r = fig.canvas.get_renderer()
     for fn_ in getattr(fig, "_post_layout", []):
         fn_(fig, r)
@@ -382,6 +391,14 @@ def save(fig, name):
         log(f"    - {s}")
     fig.savefig(OUT / f"{name}.pdf", bbox_inches="tight", pad_inches=0.04)
     fig.savefig(OUT / f"{name}.png", bbox_inches="tight", pad_inches=0.04, dpi=300)
+    try:                                                     # Frontiers accepts TIFF/JPEG/EPS: RGB TIFF, 300 dpi, LZW
+        from PIL import Image
+        im = Image.open(OUT / f"{name}.png")
+        if im.mode != "RGB":
+            bg = Image.new("RGB", im.size, "white"); bg.paste(im.convert("RGBA"), mask=im.convert("RGBA").split()[-1]); im = bg
+        im.save(OUT / f"{name}.tif", dpi=(300, 300), compression="tiff_lzw")
+    except Exception as e:
+        log(f"  TIFF export failed for {name}: {e}")
     plt.close(fig)
     log(f"  saved {name}")
 
@@ -443,7 +460,7 @@ def fig1():
             axC.bar(range(len(f)), f[c], bottom=bottom, color=ccol(c), width=0.85, lw=0)
             bottom += f[c].values
         axC.set_xticks(range(len(f)))
-        axC.set_xticklabels([s.split("_", 1)[-1] for s in f.index], rotation=90, fontsize=5)
+        axC.set_xticklabels([s.split("_", 1)[-1] for s in f.index], rotation=90, fontsize=FS)
         axC.set_xlim(-0.6, len(f) - 0.4); axC.set_ylim(0, 1.0)
         axC.set_ylabel("fraction of cells")
         # site band under the bars (colour = site, same as panel b)
@@ -461,7 +478,7 @@ def fig1():
         mm = m.get("malignant", pd.Series(0, index=m.index))
         mm = mm[~mm.index.str.contains("GSE112013|GSE182786")].sort_values()
         axD.barh(range(len(mm)), mm.values, color="#D55E00", height=0.7)
-        axD.set_yticks(range(len(mm))); axD.set_yticklabels([s.split("_", 1)[-1] for s in mm.index], fontsize=5)
+        axD.set_yticks(range(len(mm))); axD.set_yticklabels([s.split("_", 1)[-1] for s in mm.index], fontsize=FS)
         axD.set_ylim(-0.6, len(mm) - 0.4)
         axD.set_xlabel("malignant cells\n(lineage + CNV / 12p)")
         title(axD, "d", "malignant cells")
@@ -472,10 +489,10 @@ def fig1():
     if lm is not None:
         lm = lm[lm["n"] >= 10].drop(columns="n")
         im = axE.imshow(lm.values.astype(float), aspect="auto", cmap="viridis", vmin=0, vmax=1, interpolation="nearest")
-        axE.set_xticks(range(lm.shape[1])); axE.set_xticklabels(lm.columns, rotation=90, fontsize=5)
-        axE.set_yticks(range(len(lm))); axE.set_yticklabels([s.split("_", 1)[-1] for s in lm.index], fontsize=5)
+        axE.set_xticks(range(lm.shape[1])); axE.set_xticklabels(lm.columns, rotation=90, fontsize=FS)
+        axE.set_yticks(range(len(lm))); axE.set_yticklabels([s.split("_", 1)[-1] for s in lm.index], fontsize=FS)
         cb = fig.colorbar(im, ax=axE, shrink=0.6, aspect=15, pad=0.02)
-        cb.set_label("fraction\nexpressing", fontsize=5.5); cb.ax.tick_params(labelsize=5)
+        cb.set_label("fraction\nexpressing", fontsize=FS); cb.ax.tick_params(labelsize=FS)
         title(axE, "e", "SE vs EC markers\n(malignant cells)")
     else:
         missing(axE, "S7_malignant_lineage_markers.csv", "e")
@@ -556,9 +573,9 @@ def cramers_v(t):
 
 def fig3():
     fig = new_fig(118)
-    gs = fig.add_gridspec(2, 4, width_ratios=[0.75, 1, 1, 1.35])
+    gs = fig.add_gridspec(2, 3, height_ratios=[1, 1.35])       # 8-pt text: three panels per row
     axA = fig.add_subplot(gs[0, 0]); axC = fig.add_subplot(gs[0, 1]); axD = fig.add_subplot(gs[0, 2])
-    axE = fig.add_subplot(gs[1, 0:3]); axB = fig.add_subplot(gs[:, 3])
+    axE = fig.add_subplot(gs[1, 0:2]); axB = fig.add_subplot(gs[1, 2])
     t0 = read(S2 / "S5_ecotype_x_histology.csv", index_col=0)
     t1 = read(S2 / "S5c_ecotype_x_histology.csv", index_col=0)
     if t0 is not None and t1 is not None:
@@ -566,8 +583,8 @@ def fig3():
              cramers_v(t1[[c for c in t1.columns if c in ("SE", "NSGCT")]])]
         axA.bar([0, 1], v, color=["#999999", "#0072B2"], width=0.6)
         for i, x in enumerate(v):
-            axA.text(i, x + 0.03, f"{x:.2f}", ha="center", va="bottom", fontsize=6)
-        axA.set_xticks([0, 1]); axA.set_xticklabels(["raw", "histology-\nadjusted"]); axA.set_ylim(0, 1.12)
+            axA.text(i, x + 0.03, f"{x:.2f}", ha="center", va="bottom", fontsize=FS)
+        axA.set_xticks([0, 1]); axA.set_xticklabels(["raw", "adjusted"]); axA.set_ylim(0, 1.12)
         axA.set_yticks([0, 0.25, 0.5, 0.75, 1])
         axA.set_ylabel("Cramer's V\n(ecotype vs histology)")
         title(axA, "a", "confounding")
@@ -579,10 +596,10 @@ def fig3():
         H = L.loc[top]; H = H / H.max()
         im = axB.imshow(H.values, aspect="auto", cmap="Blues", vmin=0, vmax=1, interpolation="nearest")
         axB.set_xticks(range(H.shape[1])); axB.set_xticklabels([pretty(c) for c in H.columns])
-        axB.set_yticks(range(len(top))); axB.set_yticklabels([pretty(s) for s in top], fontsize=5.5)
+        axB.set_yticks(range(len(top))); axB.set_yticklabels([pretty(s) for s in top], fontsize=FS)
         axB.tick_params(axis="x", top=True, labeltop=True, bottom=False, labelbottom=False)
         cb = fig.colorbar(im, ax=axB, location="bottom", shrink=0.7, aspect=20, pad=0.01)
-        cb.set_label("loading (scaled to programme max)", fontsize=5.5); cb.ax.tick_params(labelsize=5)
+        cb.set_label("loading (scaled to programme max)", fontsize=FS); cb.ax.tick_params(labelsize=FS)
         title(axB, "b", "programme composition\n(top 8 states each)")
     else:
         missing(axB, "S5c_programme_state_loadings.csv", "b")
@@ -594,7 +611,7 @@ def fig3():
             data = [e.loc[e["histology_used"] == h, c].values for h in hs]
             jitter_box(ax, data, [HIST_C[h] for h in hs], [f"{h}\n(n={len(x)})" for h, x in zip(hs, data)], s=2)
             ax.set_ylabel(f"{c.replace('score_', '')} score")
-            title(ax, l, f"{c.replace('score_', '')} by histology")
+            title(ax, l, f"{c.replace('score_', '')}\nby histology")
         for ax, l in zip((axC, axD)[len(sc_cols):], "cd"[len(sc_cols):]):
             missing(ax, "score_* column", l)
     else:
@@ -659,13 +676,13 @@ def fig4():
                 if i == 0:
                     title(ax, "a" if j == 0 else "", pretty(c))
                 if j == 0:
-                    ax.set_ylabel(str(lib), fontsize=6)
+                    ax.set_ylabel(str(lib), fontsize=FS)
         for j, c in enumerate(cols):                                     # one colour bar per programme
             sm = matplotlib.cm.ScalarMappable(norm=matplotlib.colors.Normalize(0, 1), cmap=cmaps[c])
             cb = sf_top.colorbar(sm, ax=col_axes[c], location="bottom", shrink=0.75, aspect=14, pad=0.02, ticks=[0, 1])
-            cb.ax.set_xticklabels(["low", "high"], fontsize=5); cb.outline.set_linewidth(0.3)
+            cb.ax.set_xticklabels(["low", "high"], fontsize=FS); cb.outline.set_linewidth(0.3)
             if j == 0:
-                cb.set_label("scaled within slide (2nd-98th pct.)", fontsize=5)
+                cb.set_label("scaled within slide (2nd-98th pct.)", fontsize=FS)
 
         def _spot_size(fig_, r_):
             """after layout: spot diameter = spot spacing on screen -> spots tile the tissue (no white gaps)"""
@@ -703,7 +720,7 @@ def fig4():
         y = np.arange(len(rh)); hgt = 0.8 / max(rh.shape[1], 1)
         for j, s_ in enumerate(rh.columns):
             axc.barh(y + (j - (rh.shape[1] - 1) / 2) * hgt, rh[s_].values, hgt, color=scol.get(s_, OKABE[j]), lw=0)
-        axc.set_yticks(y); axc.set_yticklabels(rh.index, fontsize=5.5); axc.invert_yaxis()
+        axc.set_yticks(y); axc.set_yticklabels(rh.index, fontsize=FS); axc.invert_yaxis()
         axc.axvline(0, c="k", lw=0.4); axc.set_xlabel("Spearman rho across spots")
         title(axc, "c", "co-localisation (colours = slide, as in b)")
     else:
@@ -713,9 +730,9 @@ def fig4():
 
 # ============================================================ Fig 5
 def fig5():
-    fig = new_fig(72)
-    gs = fig.add_gridspec(1, 3, width_ratios=[1.15, 1, 1])
-    axes = [fig.add_subplot(gs[0, i]) for i in range(3)]
+    fig = new_fig(105)                                          # 8-pt text: A full height left, B and C stacked right
+    gs = fig.add_gridspec(2, 2, width_ratios=[1.1, 1])
+    axes = [fig.add_subplot(gs[:, 0]), fig.add_subplot(gs[0, 1]), fig.add_subplot(gs[1, 1])]
     C = read(S4 / "C1_genomics_vs_programmes.csv")
     if C is not None:
         bcol = "beta_SD_hist_purity" if "beta_SD_hist_purity" in C else "beta_SD"
@@ -735,12 +752,12 @@ def fig5():
         axes[0].errorbar(C[bcol], y, xerr=1.96 * se, fmt="none", ecolor=cols, lw=0.8)
         axes[0].scatter(C[bcol], y, c=cols, s=10, zorder=3)
         axes[0].axvline(0, c="k", lw=0.4); axes[0].set_yticks(y)
-        axes[0].set_yticklabels([f"{pretty(f)} - {pretty(p)}" for f, p in zip(C["feature"], C["programme"])], fontsize=5.5)
+        axes[0].set_yticklabels([f"{pretty(f)} - {pretty(p)}" for f, p in zip(C["feature"], C["programme"])], fontsize=FS)
         axes[0].set_xlabel("beta per SD, adjusted for\nhistology + purity (95% CI)")
         axes[0].legend(handles=[Line2D([], [], marker="o", ls="", c=OKABE[3], ms=3, label="q < 0.05"),
                                 Line2D([], [], marker="o", ls="", c="#999999", ms=3, label="q >= 0.05")],
                        loc="upper left", bbox_to_anchor=(0, -0.28), ncol=2)
-        title(axes[0], "a", "chromosomal dosage vs programmes")
+        title(axes[0], "a", "chromosomal dosage\nvs programmes")
     else:
         missing(axes[0], "C1_genomics_vs_programmes.csv", "a")
     M = read(S4 / "B1_MIF_axis.csv")
@@ -749,7 +766,7 @@ def fig5():
         m = M[(M["context"] == "primary_SE") & (M["receptor"] == "CD74")].sort_values("score").tail(12)
     if m is not None and len(m):
         axes[1].barh(range(len(m)), m["score"], color="#0072B2", height=0.7)
-        axes[1].set_yticks(range(len(m))); axes[1].set_yticklabels([pretty(r_) for r_ in m["receiver"]], fontsize=5.5)
+        axes[1].set_yticks(range(len(m))); axes[1].set_yticklabels([pretty(r_) for r_ in m["receiver"]], fontsize=FS)
         axes[1].set_ylim(-0.6, len(m) - 0.4)
         axes[1].set_xlabel("MIF (tumour) x CD74 (receiver)")
         title(axes[1], "b", "tumour MIF -> CD74\n(primary seminoma)")
@@ -761,14 +778,13 @@ def fig5():
         if len(b):
             axes[2].barh(range(len(b)), b["log2FC_depthmatched"], height=0.7,
                          color=[OKABE[3] if v > 0 else OKABE[0] for v in b["log2FC_depthmatched"]])
-            axes[2].set_yticks(range(len(b))); axes[2].set_yticklabels(b["ligand"], fontsize=5.5)
+            axes[2].set_yticks(range(len(b))); axes[2].set_yticklabels(b["ligand"], fontsize=FS)
             axes[2].set_ylim(-0.6, len(b) - 0.4)
             axes[2].axvline(0, c="k", lw=0.4)
-            axes[2].legend(handles=patches(["up in EC-like", "up in SE-like"], [OKABE[3], OKABE[0]]),
-                           loc="upper left", bbox_to_anchor=(0, -0.28), ncol=2)
+            legend_right(axes[2], handles=patches(["up in EC-like", "up in SE-like"], [OKABE[3], OKABE[0]]))
         else:
             axes[2].text(0.5, 0.5, "no ligand with q < 0.05\nafter depth matching", ha="center", va="center",
-                         transform=axes[2].transAxes, fontsize=6)
+                         transform=axes[2].transAxes, fontsize=FS)
             axes[2].set_xticks([]); axes[2].set_yticks([])
             for sp in axes[2].spines.values():
                 sp.set_visible(False)
@@ -776,6 +792,10 @@ def fig5():
         title(axes[2], "c", "same lymph node (LN1)\nexploratory")
     else:
         missing(axes[2], "B4_LN1_SE_vs_EC_ligands.csv", "c")
+    from matplotlib.ticker import MaxNLocator
+    for ax_ in axes:                                           # thin crowded numeric ticks; keep removed ticks removed
+        if len(ax_.get_xticks()):
+            ax_.xaxis.set_major_locator(MaxNLocator(nbins=4))
     save(fig, "Fig5_dosage_communication")
 
 
@@ -795,7 +815,7 @@ def fig6():
         axA.xaxis.set_major_locator(FixedLocator(tk)); axA.xaxis.set_major_formatter(FixedFormatter([f"{t:g}" for t in tk]))
         axA.xaxis.set_minor_locator(NullLocator())
         axA.set_yticks(y); axA.set_ylim(-0.6, len(P) - 0.4)
-        axA.set_yticklabels([f"{pretty(p_)}  (q = {q:.2f})" for p_, q in zip(P["predictor"], P["q_LRT_BH"])], fontsize=5.5)
+        axA.set_yticklabels([f"{pretty(p_)}  (q = {q:.2f})" for p_, q in zip(P["predictor"], P["q_LRT_BH"])], fontsize=FS)
         axA.set_xlabel("HR per SD (adjusted for histology + LVI)")
         title(axA, "a", f"TCGA stage I PFI (n = {int(P['n'].max())}, {int(P['events'].max())} events)")
         axB.bar(range(len(P)), P["dC_optimism_corr"], color="#0072B2", width=0.6)
@@ -827,8 +847,8 @@ def fig6():
     if V is not None:
         y = np.arange(len(V))[::-1]
         axD.errorbar(V["AUC"], y, xerr=[V["AUC"] - V["AUC_low"], V["AUC_high"] - V["AUC"]], fmt="o", c="k", ms=3, lw=0.8)
-        axD.axvline(0.5, ls="--", c="grey", lw=0.5); axD.set_xlim(0.1, 0.9)
-        axD.set_yticks(y); axD.set_yticklabels([pretty(p_) for p_ in V["predictor"]], fontsize=5.5)
+        axD.axvline(0.5, ls="--", c="grey", lw=0.5); axD.set_xlim(0.1, 0.9); axD.set_xticks([0.2, 0.5, 0.8])
+        axD.set_yticks(y); axD.set_yticklabels([pretty(p_) for p_ in V["predictor"]], fontsize=FS)
         axD.set_ylim(-0.6, len(V) - 0.4)
         axD.set_xlabel("AUC for relapse (95% bootstrap CI)")
         G = read(S3 / "S3_gse99420_scores.csv", index_col=0)
@@ -866,7 +886,7 @@ def fig7():
         if len(r):
             yy = np.arange(len(r))[::-1]
             axC.barh(yy, r["score"], color="#0072B2", height=0.7)
-            axC.set_yticks(yy); axC.set_yticklabels([f"{p} (rank {k})" for p, k in zip(r["perturbagen"], r["rank"])], fontsize=5.5)
+            axC.set_yticks(yy); axC.set_yticklabels([f"{p} (rank {k})" for p, k in zip(r["perturbagen"], r["rank"])], fontsize=FS)
             axC.set_ylim(-0.6, len(r) - 0.4)
             axC.set_xlabel("L1000CDS2 reversal score")
             title(axC, "b", "reversers of the EC-like programme\n(pan-reversers removed)")
@@ -896,7 +916,7 @@ def fig7():
             axB.set_xlabel("fraction of tumour cells expressing")
             axB.set_ylabel("fraction of normal-testis\ncells expressing")
             cb = fig.colorbar(sca, ax=axB, shrink=0.8, aspect=18, pad=0.01)
-            cb.set_label("log2FC tumour vs rest", fontsize=5.5); cb.ax.tick_params(labelsize=5)
+            cb.set_label("log2FC tumour vs rest", fontsize=FS); cb.ax.tick_params(labelsize=FS)
             ref = [v for v in (1, 5, 20) if v <= max(nag.max(), 1)] or [1]
             axB.legend(handles=[plt.scatter([], [], s=8 + 14 * np.sqrt(v), c="w", edgecolor="k", lw=0.3) for v in ref],
                        labels=[str(v) for v in ref], title="n agents", loc="upper left", bbox_to_anchor=(1.12, 1.0))
@@ -909,6 +929,58 @@ def fig7():
 
 
 # ============================================================ supplementary tables
+TABLE_LEGENDS = {
+    'S1_QC': ('Supplementary Table S1. Quality control of the single-cell samples.',
+        'Per-sample quality-control summary of the 15 single-cell samples, including the filtering thresholds applied and the numbers of cells before and after filtering.'),
+    'S2_malignant': ('Supplementary Table S2. Malignant-cell calls per sample.',
+        'Number of cells per sample called malignant (tumour lineage with copy-number or chromosome 12p evidence), tumour-lineage cells without copy-number evidence (CNV-negative) and non-malignant cells.'),
+    'S3_state_fractions_sc': ('Supplementary Table S3. Cell-state fractions in the single-cell samples.',
+        'Fraction of each fine cell state per single-cell sample; these fractions served as the reference values in the leave-one-dataset-out benchmark.'),
+    'S4_reference': ('Supplementary Table S4. Composition of the deconvolution reference.',
+        'Number of reference cells per cell state and cell type (8,076 cells, 32 states, 10 cell types).'),
+    'S5_benchmark': ('Supplementary Table S5. Leave-one-dataset-out deconvolution benchmark.',
+        "Lin's concordance correlation coefficient between estimated and single-cell fractions per cell type for the two-pass model, pass 1 alone and non-negative least squares."),
+    'S6_k_selection': ('Supplementary Table S6. Selection of the number of microenvironment programmes.',
+        'Consensus non-negative matrix factorisation for k = 2 to 6: cophenetic coefficient, silhouette width and size of the smallest cluster, for the unadjusted and within-histology adjusted analyses.'),
+    'S7_programme_loadings': ('Supplementary Table S7. State loadings of the microenvironment programmes.',
+        'Loading of each immune and stromal cell state on each programme of the histology-adjusted factorisation.'),
+    'S8_signature_agreement': ('Supplementary Table S8. Agreement between state signatures and deconvolved fractions.',
+        'Spearman correlation across TCGA tumours between rank-based state signature scores and deconvolved state fractions.'),
+    'S9_clinical_primary': ('Supplementary Table S9. Pre-specified primary relapse analysis.',
+        'TCGA stage I tumours, progression-free interval: univariable and adjusted hazard ratios per SD, likelihood-ratio tests against histology plus LVI, Benjamini-Hochberg q values, optimism-corrected C-indices and predictor-by-histology interaction tests.'),
+    'S10_clinical_sensitivity': ('Supplementary Table S10. Secondary and sensitivity analyses.',
+        'Hazard ratios per SD for disease-free interval, all stages with adjustment for stage, adjustment for adjuvant radiotherapy, pathological T2 or higher instead of LVI, and histology-specific models.'),
+    'S11_validation_GSE99420': ('Supplementary Table S11. External validation in GSE99420.',
+        'Area under the ROC curve with bootstrap 95% confidence intervals, histology-adjusted odds ratios per SD and within-histology Wilcoxon tests for each locked signature, with Benjamini-Hochberg correction across the five predictors.'),
+    'S12_signature_sanity': ('Supplementary Table S12. Agreement of the locked signatures with their TCGA predictors.',
+        'Spearman correlation in TCGA between each locked gene-signature score and the predictor it represents.'),
+    'S13_spatial_moran': ('Supplementary Table S13. Spatial autocorrelation in the Visium sections.',
+        "Moran's I and permutation P values (199 permutations) for each score in each of the three seminoma sections."),
+    'S14_niche_test': ('Supplementary Table S14. Programme niche test.',
+        'Within-programme versus between-programme spatial correlation of state fractions per section, with P values from 999 permutations of programme labels.'),
+    'S15_LR_tumour_TME': ('Supplementary Table S15. Tumour-to-microenvironment ligand-receptor scores.',
+        'Scores of 25 curated ligand-receptor pairs from malignant cells to each receiver state in primary seminoma-containing tumours and lymph-node metastases, with permutation P values and Benjamini-Hochberg q values.'),
+    'S16_LN1_ligands': ('Supplementary Table S16. Ligand expression of EC-like versus SE-like malignant cells in LN1.',
+        'Comparison after binomial thinning to matched sequencing depth: fraction of expressing cells, mean expression, test statistics and q values for each ligand.'),
+    'S17_genomics': ('Supplementary Table S17. Genomic associations with the programmes.',
+        'Regression coefficients (per SD) of programme scores on 12p dosage, chromosome X dosage, KIT, KRAS and NRAS mutation and number of mutated genes, adjusted for histology and tumour purity, with Benjamini-Hochberg correction across the 24 tests.'),
+    'S18_targets': ('Supplementary Table S18. Tumour-intrinsic target candidates.',
+        'Genes up-regulated in SE-like or EC-like malignant cells versus non-tumour cells, with fold changes, detection rates, expression in the deconvolved TCGA tumour profile and expression in normal testis cells.'),
+    'S19_druggable_targets': ('Supplementary Table S19. Druggable target annotation.',
+        'Tumour-intrinsic and programme-level candidates with drug-gene interactions retrieved from DGIdb 5.0.'),
+    'S20_drugs_strict': ('Supplementary Table S20. Drug priority list after the strict interaction filter.',
+        'Agents retained after keeping targeting interaction types with an interaction score at or above the median and excluding antibody-drug conjugate payload links; two literature-curated CLDN6-directed agents are labelled as curated. Seven entries judged mechanistically implausible (see Methods) are retained but were not interpreted.'),
+    'S21_LINCS': ('Supplementary Table S21. L1000CDS2 connectivity results.',
+        'Perturbagens reversing the EC-like versus SE-like malignant programme and the tumour versus normal germ cell programme, with ranks and flags for non-specific reversers.'),
+    'S22_convergence': ('Supplementary Table S22. Convergence of connectivity and target-based nominations.',
+        'Perturbagens that reversed the EC-like programme and also act on data-nominated targets in DGIdb.'),
+    'S23_locked_signatures': ('Supplementary Table S23. Locked gene signatures.',
+        'Genes of each signature locked in TCGA before scoring GSE99420 and the Visium sections (predictor, direction and gene).'),
+    'S24_decision_curve_3y': ('Supplementary Table S24. Decision-curve analysis at 3 years.',
+        'Net benefit by threshold probability for treat all, treat none, histology plus LVI (M0) and M0 plus the P1 immune programme score (M1), TCGA stage I tumours (n = 98); apparent estimates without correction for optimism.'),
+}
+
+
 def suppl_tables():
     sheets = {
         "S1_QC": S1 / "tables" / "S2_qc_per_sample.csv", "S2_malignant": S1 / "tables" / "S5_malignant_per_sample.csv",
@@ -928,6 +1000,8 @@ def suppl_tables():
     try:
         import openpyxl  # noqa
         with pd.ExcelWriter(OUT / "Supplementary_Tables.xlsx") as xw:
+            pd.DataFrame([(sh, t, l) for sh, (t, l) in TABLE_LEGENDS.items()],
+                         columns=["sheet", "table", "legend"]).to_excel(xw, sheet_name="Contents", index=False)
             idx = []
             for name, f in sheets.items():
                 if f.exists():
@@ -941,7 +1015,9 @@ def suppl_tables():
                 pd.DataFrame([(k, d, g) for k, v in sig.items() for d in ("up", "down") for g in (v.get(d) or [])],
                              columns=["predictor", "direction", "gene"]).to_excel(xw, sheet_name="S23_locked_signatures", index=False)
                 idx.append(dict(sheet="S23_locked_signatures", source=str(locked.relative_to(PROJ)), rows="json"))
-            pd.DataFrame(idx).to_excel(xw, sheet_name="INDEX", index=False)
+            miss = [r["sheet"] for r in idx if r["rows"] == "MISSING"]
+            if miss:
+                log("  !! supplementary tables missing: " + ", ".join(miss))
         log("  saved Supplementary_Tables.xlsx")
     except ImportError:
         log("  openpyxl not installed -> pip install openpyxl (supplementary workbook skipped)")
