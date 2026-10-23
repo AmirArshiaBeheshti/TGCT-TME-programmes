@@ -1,0 +1,33 @@
+name: scvi-env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - pip
+  - pip:
+      - numpy==2.0.2
+      - scipy==1.16.3
+      - pandas==2.3.3
+      - scikit-learn==1.9.0
+      - statsmodels==0.14.6
+      - matplotlib==3.10.9
+      - anndata==0.12.19
+      - scanpy==1.12.2
+      - scvi-tools==1.4.3
+      - torch==2.12.1
+      - scrublet==0.2.3
+      - infercnvpy==0.6.1
+      - squidpy==1.8.2
+      - liana==1.8.0
+      - lifelines==0.30.3
+      - decoupler==1.8.0
+      - leidenalg==0.12.0
+      - igraph==1.0.0
+      - umap-learn==0.5.12
+      - pynndescent==0.6.0
+      - h5py==3.16.0
+      - requests==2.34.2
+      - openpyxl==3.1.5
+      - pyarrow
+      - tabulate
