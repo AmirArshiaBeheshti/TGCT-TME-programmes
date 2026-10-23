@@ -2,8 +2,7 @@
 
 Code for the manuscript:
 
-> **Histology-independent immune and stromal programmes in testicular germ cell tumours: single-cell-anchored deconvolution, spatial organisation and absence of prognostic value in stage I disease.**
-> [Authors]. *Frontiers in Immunology* (submitted).
+> Histology-independent immune and stromal programmes in testicular germ cell tumours: single-cell-anchored deconvolution, spatial organisation and absence of prognostic value in stage I disease.
 
 All analyses use public, de-identified data. No data are stored in this repository.
 
