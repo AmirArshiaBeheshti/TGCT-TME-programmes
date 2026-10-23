@@ -9,7 +9,7 @@ Reads ONLY outputs written by stages 1-5 on this machine. Any missing input -> t
   Fig 2  deconvolution (LODO benchmark, method comparison, TCGA composition, tumour-state read-out vs pathology)
   Fig 3  histology-independent TME programmes (Cramer's V before/after, loadings, scores, k selection)
   Fig 4  spatial (programme maps, Moran's I, co-localisation with TLS / tumour)
-  Fig 5  chromosomal dosage + tumour -> TME communication (MIF axis)
+  Fig 5  chromosomal copy gain + tumour -> TME communication (MIF axis)
   Fig 6  pre-specified clinical analysis (TCGA stage I) + GSE99420 validation
   Fig 7  drug repurposing (positive controls, druggable targets, LINCS reversal)
 
@@ -757,7 +757,7 @@ def fig5():
         axes[0].legend(handles=[Line2D([], [], marker="o", ls="", c=OKABE[3], ms=3, label="q < 0.05"),
                                 Line2D([], [], marker="o", ls="", c="#999999", ms=3, label="q >= 0.05")],
                        loc="upper left", bbox_to_anchor=(0, -0.28), ncol=2)
-        title(axes[0], "a", "chromosomal dosage\nvs programmes")
+        title(axes[0], "a", "chromosomal copy gain\nvs programmes")
     else:
         missing(axes[0], "C1_genomics_vs_programmes.csv", "a")
     M = read(S4 / "B1_MIF_axis.csv")
@@ -941,9 +941,9 @@ TABLE_LEGENDS = {
     'S5_benchmark': ('Supplementary Table S5. Leave-one-dataset-out deconvolution benchmark.',
         "Lin's concordance correlation coefficient between estimated and single-cell fractions per cell type for the two-pass model, pass 1 alone and non-negative least squares."),
     'S6_k_selection': ('Supplementary Table S6. Selection of the number of microenvironment programmes.',
-        'Consensus non-negative matrix factorisation for k = 2 to 6: cophenetic coefficient, silhouette width and size of the smallest cluster, for the unadjusted and within-histology adjusted analyses.'),
+        'Consensus non-negative matrix factorisation of the histology-adjusted microenvironment for k = 2 to 6: cophenetic coefficient, silhouette width and size of the smallest cluster (min_cluster).'),
     'S7_programme_loadings': ('Supplementary Table S7. State loadings of the microenvironment programmes.',
-        'Loading of each immune and stromal cell state on each programme of the histology-adjusted factorisation.'),
+        'Loading of each immune and stromal cell state on the two programmes of the histology-adjusted factorisation (TME1, immune programme P1; TME2, vascular-stromal programme P2).'),
     'S8_signature_agreement': ('Supplementary Table S8. Agreement between state signatures and deconvolved fractions.',
         'Spearman correlation across TCGA tumours between rank-based state signature scores and deconvolved state fractions.'),
     'S9_clinical_primary': ('Supplementary Table S9. Pre-specified primary relapse analysis.',
@@ -955,7 +955,7 @@ TABLE_LEGENDS = {
     'S12_signature_sanity': ('Supplementary Table S12. Agreement of the locked signatures with their TCGA predictors.',
         'Spearman correlation in TCGA between each locked gene-signature score and the predictor it represents.'),
     'S13_spatial_moran': ('Supplementary Table S13. Spatial autocorrelation in the Visium sections.',
-        "Moran's I and permutation P values (199 permutations) for each score in each of the three seminoma sections."),
+        "Moran's I and permutation P values (199 permutations) for each score in each of the three seminoma sections; rows labelled rho(…) give the Spearman correlation across spots between the two named scores (no permutation P value)."),
     'S14_niche_test': ('Supplementary Table S14. Programme niche test.',
         'Within-programme versus between-programme spatial correlation of state fractions per section, with P values from 999 permutations of programme labels.'),
     'S15_LR_tumour_TME': ('Supplementary Table S15. Tumour-to-microenvironment ligand-receptor scores.',
@@ -963,7 +963,7 @@ TABLE_LEGENDS = {
     'S16_LN1_ligands': ('Supplementary Table S16. Ligand expression of EC-like versus SE-like malignant cells in LN1.',
         'Comparison after binomial thinning to matched sequencing depth: fraction of expressing cells, mean expression, test statistics and q values for each ligand.'),
     'S17_genomics': ('Supplementary Table S17. Genomic associations with the programmes.',
-        'Regression coefficients (per SD) of programme scores on 12p dosage, chromosome X dosage, KIT, KRAS and NRAS mutation and number of mutated genes, adjusted for histology and tumour purity, with Benjamini-Hochberg correction across the 24 tests.'),
+        'Regression coefficients (per SD) of programme scores on 12p and chromosome X copy gain (mean positive GISTIC2 call), KIT, KRAS and NRAS mutation and number of mutated genes, adjusted for histology and tumour purity, with Benjamini-Hochberg correction across the 24 tests.'),
     'S18_targets': ('Supplementary Table S18. Tumour-intrinsic target candidates.',
         'Genes up-regulated in SE-like or EC-like malignant cells versus non-tumour cells, with fold changes, detection rates, expression in the deconvolved TCGA tumour profile and expression in normal testis cells.'),
     'S19_druggable_targets': ('Supplementary Table S19. Druggable target annotation.',
@@ -1002,7 +1002,7 @@ def suppl_tables():
     try:
         import openpyxl  # noqa
         with pd.ExcelWriter(OUT / "Supplementary_Tables.xlsx") as xw:
-            pd.DataFrame([(sh, t, l) for sh, (t, l) in TABLE_LEGENDS.items()],
+            pd.DataFrame(sorted([(sh, t, l) for sh, (t, l) in TABLE_LEGENDS.items()], key=lambda r: int(r[0].split("_")[0][1:])),
                          columns=["sheet", "table", "legend"]).to_excel(xw, sheet_name="Contents", index=False)
             idx = []
             for name, f in sheets.items():
