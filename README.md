@@ -11,15 +11,15 @@ All analyses use public, de-identified data. No data are stored in this reposito
 
 | Step | Script | What it does | Main outputs |
 |---|---|---|---|
-| 0 | `code/step0_data_audit.py` | Downloads and audits the public datasets | `step0_audit/` |
-| 0b | `code/step0b_validation_cohort_and_tcga_clinical.py` | Harmonises GSE99420 and TCGA-TGCT clinical data | `data/processed/` |
-| 1 | `code/stage1_sc_atlas.py` | Single-cell atlas: QC, Scrublet, scVI, lineage annotation, inferCNV/12p malignant calls, fine states, deconvolution reference | `stage1_atlas/` |
-| 2 | `code/stage2_tcga_ecosystem.py` | Two-pass multinomial deconvolution of TCGA-TGCT, leave-one-dataset-out benchmark, histology-adjusted consensus NMF programmes | `stage2_tcga/` |
-| 3 | `code/stage3_clinical_models.py` | Pre-specified stage I relapse analysis (Cox, optimism-corrected C-index, decision curves) and GSE99420 validation with locked signatures | `stage3_clinical/` |
-| 4 | `code/stage4_mechanism_spatial.py` | Visium spatial analysis, ligand-receptor scoring, LIANA+, TCGA copy-number/mutation associations | `stage4_mechanism/` |
-| 5 | `code/stage5_drug_repurposing.py` | Target nomination, DGIdb 5.0 annotation, L1000CDS2 reversal (hypothesis-generating) | `stage5_drugs/` |
-| Figures | `code/make_figures.py` | Figures 1-7 and the supplementary-table workbook | `figures_final/` |
-| — | `code/software_versions.py` | Records package versions | `software_versions.txt` |
+| 0 | `step0_data_audit.py` | Downloads and audits the public datasets | `step0_audit/` |
+| 0b | `step0b_validation_cohort_and_tcga_clinical.py` | Harmonises GSE99420 and TCGA-TGCT clinical data | `data/processed/` |
+| 1 | `stage1_sc_atlas.py` | Single-cell atlas: QC, Scrublet, scVI, lineage annotation, inferCNV/12p malignant calls, fine states, deconvolution reference | `stage1_atlas/` |
+| 2 | `stage2_tcga_ecosystem.py` | Two-pass multinomial deconvolution of TCGA-TGCT, leave-one-dataset-out benchmark, histology-adjusted consensus NMF programmes | `stage2_tcga/` |
+| 3 | `stage3_clinical_models.py` | Pre-specified stage I relapse analysis (Cox, optimism-corrected C-index, decision curves) and GSE99420 validation with locked signatures | `stage3_clinical/` |
+| 4 | `stage4_mechanism_spatial.py` | Visium spatial analysis, ligand-receptor scoring, LIANA+, TCGA copy-number/mutation associations | `stage4_mechanism/` |
+| 5 | `stage5_drug_repurposing.py` | Target nomination, DGIdb 5.0 annotation, L1000CDS2 reversal (hypothesis-generating) | `stage5_drugs/` |
+| Figures | `make_figures.py` | Figures 1-7 and the supplementary-table workbook | `figures_final/` |
+| — | `software_versions.py` | Records package versions | `software_versions.txt` |
 
 Run the scripts in order. Each stage reads only the outputs of earlier stages and writes a `STAGE*_REPORT.md`.
 
@@ -41,7 +41,7 @@ Run the scripts in order. Each stage reads only the outputs of earlier stages an
 conda env create -f environment.yml
 conda activate scvi-env
 export TGCT_BASE="/path/to/project"     # folder that will contain TGCT_ecotype/
-python code/step0_data_audit.py
+python step0_data_audit.py
 ```
 
 A GPU is recommended for scVI (stage 1); the other stages run on CPU.
