@@ -1,0 +1,18 @@
+# data and large outputs are not tracked
+TGCT_ecotype/
+data/
+*.h5ad
+*.h5
+*.mtx
+*.mtx.gz
+*.tar
+*.tar.gz
+*.parquet
+*.csv.gz
+scvi_model/
+checkpoints/
+# python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
